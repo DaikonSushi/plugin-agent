@@ -66,6 +66,19 @@ The default model endpoint is OpenAI-compatible:
 }
 ```
 
+Access control supports account, group, and group-role whitelists. Empty lists allow all.
+
+```json
+{
+  "access": {
+    "person_whitelist": [493541311],
+    "group_whitelist": [649219772, 787632139],
+    "role_whitelist": ["owner", "admin"]
+  },
+  "admin_users": [2577954317]
+}
+```
+
 ## Local Build
 
 ```bash

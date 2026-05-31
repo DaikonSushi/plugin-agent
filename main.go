@@ -20,7 +20,7 @@ type AgentPlugin struct {
 func (p *AgentPlugin) Info() pluginsdk.PluginInfo {
 	return pluginsdk.PluginInfo{
 		Name:        "agent",
-		Version:     "0.1.0",
+		Version:     "0.1.1",
 		Description: "Personal AI agent with local project awareness, skills, tools, and scheduled tasks",
 		Author:      "hovanzhang",
 		Commands: []string{
@@ -62,6 +62,9 @@ func (p *AgentPlugin) OnMessage(ctx context.Context, bot *pluginsdk.BotClient, m
 	if p == nil || p.state == nil || p.engine == nil {
 		return false
 	}
+	if !p.allowed(msg) {
+		return false
+	}
 	key := targetKey(msg.Type, msg.GroupID, msg.UserID)
 	if msg.Type == "private" && p.cfg.ChatTrigger.HandleAllPrivate {
 		p.handlePrompt(ctx, bot, msg, msg.Text)
@@ -75,6 +78,10 @@ func (p *AgentPlugin) OnMessage(ctx context.Context, bot *pluginsdk.BotClient, m
 }
 
 func (p *AgentPlugin) OnCommand(ctx context.Context, bot *pluginsdk.BotClient, cmd string, args []string, msg *pluginsdk.Message) bool {
+	if !p.allowed(msg) {
+		bot.Reply(msg, pluginsdk.Text("抱歉，您没有使用 agent 的权限"))
+		return true
+	}
 	switch cmd {
 	case "ai":
 		if len(args) == 0 {
@@ -89,6 +96,14 @@ func (p *AgentPlugin) OnCommand(ctx context.Context, bot *pluginsdk.BotClient, c
 	default:
 		return false
 	}
+}
+
+func (p *AgentPlugin) allowed(msg *pluginsdk.Message) bool {
+	role := ""
+	if msg.Sender != nil {
+		role = msg.Sender.Role
+	}
+	return p.cfg.IsAllowedMessage(msg.Type, msg.GroupID, msg.UserID, role)
 }
 
 func (p *AgentPlugin) handlePrompt(ctx context.Context, bot *pluginsdk.BotClient, msg *pluginsdk.Message, prompt string) {

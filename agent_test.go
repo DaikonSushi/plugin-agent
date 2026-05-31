@@ -65,6 +65,25 @@ func TestParseSkill(t *testing.T) {
 	}
 }
 
+func TestRoleWhitelist(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.AdminUsers = []int64{1}
+	cfg.Access.GroupWhitelist = []int64{100}
+	cfg.Access.RoleWhitelist = []string{"owner", "admin"}
+	if !cfg.IsAllowedMessage("group", 100, 2, "admin") {
+		t.Fatal("admin role should be allowed")
+	}
+	if cfg.IsAllowedMessage("group", 100, 2, "member") {
+		t.Fatal("member role should be rejected")
+	}
+	if cfg.IsAllowedMessage("group", 200, 2, "admin") {
+		t.Fatal("non-whitelisted group should be rejected")
+	}
+	if !cfg.IsAllowedMessage("group", 200, 1, "member") {
+		t.Fatal("configured admin should bypass access whitelist")
+	}
+}
+
 func TestToolCallDisabled(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Permission.AutoExecute = false

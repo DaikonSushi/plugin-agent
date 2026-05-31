@@ -18,6 +18,7 @@ type Config struct {
 	SkillsDir   string            `json:"skills_dir"`
 	DataDir     string            `json:"data_dir"`
 	Schedule    ScheduleConfig    `json:"schedule"`
+	Access      AccessConfig      `json:"access"`
 	ChatTrigger ChatTriggerConfig `json:"chat_triggers"`
 	AdminUsers  []int64           `json:"admin_users"`
 }
@@ -50,6 +51,12 @@ type ProjectConfig struct {
 type ScheduleConfig struct {
 	Timezone     string `json:"timezone"`
 	CheckSeconds int    `json:"check_seconds"`
+}
+
+type AccessConfig struct {
+	PersonWhitelist []int64  `json:"person_whitelist"`
+	GroupWhitelist  []int64  `json:"group_whitelist"`
+	RoleWhitelist   []string `json:"role_whitelist"`
 }
 
 type ChatTriggerConfig struct {
@@ -87,6 +94,11 @@ func DefaultConfig() *Config {
 		Schedule: ScheduleConfig{
 			Timezone:     "Asia/Shanghai",
 			CheckSeconds: 5,
+		},
+		Access: AccessConfig{
+			PersonWhitelist: []int64{},
+			GroupWhitelist:  []int64{},
+			RoleWhitelist:   []string{},
 		},
 		ChatTrigger: ChatTriggerConfig{
 			RequireMentionInGroup: true,
@@ -186,6 +198,45 @@ func (c *Config) IsAdmin(userID int64) bool {
 	}
 	for _, id := range c.AdminUsers {
 		if id == userID {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Config) IsAllowedMessage(msgType string, groupID, userID int64, role string) bool {
+	if c.IsAdmin(userID) {
+		return true
+	}
+	if msgType == "group" {
+		if !int64Allowed(groupID, c.Access.GroupWhitelist) {
+			return false
+		}
+		if !roleAllowed(role, c.Access.RoleWhitelist) {
+			return false
+		}
+	}
+	return int64Allowed(userID, c.Access.PersonWhitelist)
+}
+
+func int64Allowed(id int64, whitelist []int64) bool {
+	if len(whitelist) == 0 {
+		return true
+	}
+	for _, item := range whitelist {
+		if item == id {
+			return true
+		}
+	}
+	return false
+}
+
+func roleAllowed(role string, whitelist []string) bool {
+	if len(whitelist) == 0 {
+		return true
+	}
+	for _, item := range whitelist {
+		if item == role {
 			return true
 		}
 	}
