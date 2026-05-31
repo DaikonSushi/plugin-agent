@@ -1,0 +1,5 @@
+agent-plugin
+agent-plugin_*
+plugins-config/
+*.log
+*.tmp
