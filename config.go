@@ -80,7 +80,7 @@ func DefaultConfig() *Config {
 			AllowedHosts:     []string{},
 			AllowedHTTPHosts: []string{},
 			AllowedCommandPref: []string{
-				"pwd", "ls", "cat ", "sed ", "rg ", "find ", "git ", "go test", "go build",
+				"pwd", "ls", "cat ", "sed ", "rg ", "find ", "git ", "go test", "go build", "go mod ", "gofmt ",
 			},
 			DeniedCommandParts: []string{
 				"rm -rf /", "mkfs", "dd if=", ":(){", "shutdown", "reboot",
@@ -176,6 +176,9 @@ func (c *Config) applyDefaults() {
 
 func (c *Config) ensureDirs() error {
 	if err := os.MkdirAll(c.SkillsDir, 0755); err != nil {
+		return err
+	}
+	if err := EnsureDefaultSkills(c.SkillsDir); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(c.DataDir, 0755); err != nil {

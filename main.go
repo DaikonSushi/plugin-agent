@@ -20,7 +20,7 @@ type AgentPlugin struct {
 func (p *AgentPlugin) Info() pluginsdk.PluginInfo {
 	return pluginsdk.PluginInfo{
 		Name:        "agent",
-		Version:     "0.1.1",
+		Version:     "0.2.0",
 		Description: "Personal AI agent with local project awareness, skills, tools, and scheduled tasks",
 		Author:      "hovanzhang",
 		Commands: []string{

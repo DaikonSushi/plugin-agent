@@ -100,6 +100,44 @@ func TestToolCallDisabled(t *testing.T) {
 	}
 }
 
+func TestWriteFileTool(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig()
+	cfg.Permission.AllowedPaths = []string{dir}
+	cfg.DataDir = t.TempDir()
+	state, err := LoadState(cfg.DataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := NewToolRegistry(cfg, state, nil)
+	raw, _ := json.Marshal(map[string]any{"path": filepath.Join(dir, "nested", "a.txt"), "content": "hello"})
+	result := tr.Execute(nil, "write_file", raw)
+	if result.Error != "" {
+		t.Fatalf("write_file failed: %+v", result)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "nested", "a.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "hello" {
+		t.Fatalf("unexpected content: %s", data)
+	}
+}
+
+func TestEnsureDefaultSkills(t *testing.T) {
+	dir := t.TempDir()
+	if err := EnsureDefaultSkills(dir); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "qq_bot_platform", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "QQ Bot Platform Development Skill") {
+		t.Fatalf("unexpected default skill: %s", data)
+	}
+}
+
 func TestIndexerCreatesFile(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# Demo"), 0644); err != nil {

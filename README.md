@@ -6,10 +6,12 @@ Personal AI agent plugin for `bot-platform`.
 
 - OpenAI-compatible chat completions with tool calling
 - Local project awareness through file listing, reading, ripgrep search, and project indexing
+- Coding-agent tools for allowlisted file writes, Go tests/builds/formatting, and git workflows
 - Tailscale/SSH access through allowlisted remote hosts
 - HTTP requests to allowlisted endpoints
 - Scheduled reminders and recurring agent tasks
 - Skill loading from `plugins-config/agent/skills/<name>/SKILL.md`
+- A default `qq_bot_platform` skill is created on first start
 - JSON state, conversation, task, and audit persistence
 
 ## Commands

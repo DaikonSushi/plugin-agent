@@ -44,6 +44,7 @@ func (r *ToolRegistry) Definitions() []ToolDef {
 	return []ToolDef{
 		toolDef("list_files", "List files under an allowed path.", map[string]any{"path": strProp(), "max": intProp()}),
 		toolDef("read_file", "Read a text file under an allowed path.", map[string]any{"path": strProp(), "max_bytes": intProp()}),
+		toolDef("write_file", "Create or overwrite a text file under an allowed path.", map[string]any{"path": strProp(), "content": strProp()}),
 		toolDef("search_code", "Search allowed projects with ripgrep.", map[string]any{"query": strProp(), "path": strProp(), "max": intProp()}),
 		toolDef("run_command", "Run an allowlisted shell command in an allowed working directory.", map[string]any{"command": strProp(), "workdir": strProp(), "timeout_seconds": intProp()}),
 		toolDef("ssh_command", "Run an allowlisted command on an allowlisted Tailscale/SSH host.", map[string]any{"host": strProp(), "command": strProp(), "timeout_seconds": intProp()}),
@@ -82,6 +83,8 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, raw json.RawMes
 		out = r.listFiles(raw)
 	case "read_file":
 		out = r.readFile(raw)
+	case "write_file":
+		out = r.writeFile(raw)
 	case "search_code":
 		out = r.searchCode(ctx, raw)
 	case "run_command":
@@ -168,6 +171,25 @@ func (r *ToolRegistry) readFile(raw json.RawMessage) ToolResult {
 		return ToolResult{Error: err.Error()}
 	}
 	return ToolResult{Content: string(data)}
+}
+
+func (r *ToolRegistry) writeFile(raw json.RawMessage) ToolResult {
+	var args struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	}
+	_ = json.Unmarshal(raw, &args)
+	path, err := r.allowedPath(args.Path)
+	if err != nil {
+		return ToolResult{Error: err.Error()}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return ToolResult{Error: err.Error()}
+	}
+	if err := os.WriteFile(path, []byte(args.Content), 0644); err != nil {
+		return ToolResult{Error: err.Error()}
+	}
+	return ToolResult{Content: "wrote " + path}
 }
 
 func (r *ToolRegistry) searchCode(ctx context.Context, raw json.RawMessage) ToolResult {
