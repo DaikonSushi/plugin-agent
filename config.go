@@ -63,6 +63,7 @@ type ProjectConfig struct {
 }
 
 type ScheduleConfig struct {
+	Enabled      bool   `json:"enabled"`
 	Timezone     string `json:"timezone"`
 	CheckSeconds int    `json:"check_seconds"`
 }
@@ -124,6 +125,7 @@ func DefaultConfig() *Config {
 		SkillsDir: "plugins-config/agent/skills",
 		DataDir:   "plugins-config/agent/data",
 		Schedule: ScheduleConfig{
+			Enabled:      true,
 			Timezone:     "Asia/Shanghai",
 			CheckSeconds: 5,
 		},
@@ -214,6 +216,9 @@ func (c *Config) applyDefaults() {
 	if c.Schedule.Timezone == "" {
 		c.Schedule.Timezone = "Asia/Shanghai"
 	}
+	if !hasJSONField(configPath, "schedule", "enabled") {
+		c.Schedule.Enabled = true
+	}
 	if c.Schedule.CheckSeconds <= 0 {
 		c.Schedule.CheckSeconds = 5
 	}
@@ -241,6 +246,29 @@ func (c *Config) applyDefaults() {
 	if c.ConfigPolicy.BackupDir == "" {
 		c.ConfigPolicy.BackupDir = "plugins-config/config-backups"
 	}
+}
+
+func hasJSONField(path string, keys ...string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var value any
+	if err := json.Unmarshal(data, &value); err != nil {
+		return false
+	}
+	current := value
+	for _, key := range keys {
+		obj, ok := current.(map[string]any)
+		if !ok {
+			return false
+		}
+		current, ok = obj[key]
+		if !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Config) UseHermes(baseURL, apiKeyEnv string) {

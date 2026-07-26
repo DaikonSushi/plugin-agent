@@ -44,11 +44,13 @@ func (p *AgentPlugin) OnStart(bot *pluginsdk.BotClient) error {
 	p.cfg = cfg
 	p.state = state
 	p.tools = NewToolRegistry(cfg, state, bot)
-	p.scheduler = NewScheduler(cfg, state, bot)
-	p.tools.scheduler = p.scheduler
 	p.engine = NewAgentEngine(cfg, state, p.tools)
-	p.scheduler.SetEngine(p.engine)
-	p.scheduler.Start()
+	if cfg.Schedule.Enabled {
+		p.scheduler = NewScheduler(cfg, state, bot)
+		p.tools.scheduler = p.scheduler
+		p.scheduler.SetEngine(p.engine)
+		p.scheduler.Start()
+	}
 	bot.Log("info", "Agent plugin started")
 	return nil
 }
@@ -135,11 +137,6 @@ Agent commands:
 /ai <prompt>
 /agent on|off
 /agent status
-/agent tasks
-/agent task add <schedule> <prompt>
-/agent task del <id>
-/agent task pause <id>
-/agent task resume <id>
 /agent skills
 /agent index
 /agent model status
@@ -255,20 +252,29 @@ func (p *AgentPlugin) modelStatus() string {
 }
 
 func (p *AgentPlugin) handleStatus(bot *pluginsdk.BotClient, msg *pluginsdk.Message) {
+	taskCount := 0
+	if p.scheduler != nil {
+		taskCount = len(p.scheduler.List())
+	}
 	text := fmt.Sprintf(
-		"Agent status\nProvider: %s\nModel: %s\nBase URL: %s\nAuto execute: %v\nProjects: %d\nTasks: %d\nSkills: %d",
+		"Agent status\nProvider: %s\nModel: %s\nBase URL: %s\nAuto execute: %v\nLocal scheduler: %v\nProjects: %d\nTasks: %d\nSkills: %d",
 		p.cfg.Model.Provider,
 		p.cfg.Model.Model,
 		p.cfg.Model.BaseURL,
 		p.cfg.Permission.AutoExecute,
+		p.cfg.Schedule.Enabled,
 		len(p.cfg.Projects),
-		len(p.scheduler.List()),
+		taskCount,
 		len(p.tools.skills.All()),
 	)
 	bot.Reply(msg, pluginsdk.Text(text))
 }
 
 func (p *AgentPlugin) handleTasks(bot *pluginsdk.BotClient, msg *pluginsdk.Message) {
+	if p.scheduler == nil {
+		bot.Reply(msg, pluginsdk.Text("Local scheduler is disabled. Use Hermes cron jobs for reminders."))
+		return
+	}
 	tasks := p.scheduler.List()
 	if len(tasks) == 0 {
 		bot.Reply(msg, pluginsdk.Text("No scheduled tasks."))
@@ -286,6 +292,10 @@ func (p *AgentPlugin) handleTasks(bot *pluginsdk.BotClient, msg *pluginsdk.Messa
 }
 
 func (p *AgentPlugin) handleTaskCommand(bot *pluginsdk.BotClient, args []string, msg *pluginsdk.Message) {
+	if p.scheduler == nil {
+		bot.Reply(msg, pluginsdk.Text("Local scheduler is disabled. Use Hermes cron jobs for reminders."))
+		return
+	}
 	if len(args) == 0 {
 		bot.Reply(msg, pluginsdk.Text("Usage: /agent task add|del|pause|resume ..."))
 		return

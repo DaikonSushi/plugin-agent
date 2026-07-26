@@ -58,6 +58,9 @@ daily@09:30
 weekly@Mon,09:30
 ```
 
+Set `"schedule": {"enabled": false}` to disable plugin-local scheduling when
+another agent runtime, such as Hermes cron, owns reminders.
+
 ## Configuration
 
 On first start, the plugin creates:
