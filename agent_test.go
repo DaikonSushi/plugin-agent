@@ -320,7 +320,10 @@ func TestUseHermesConfig(t *testing.T) {
 }
 
 func TestHermesChatRequestUsesSessionAndNoLocalTools(t *testing.T) {
-	t.Setenv("TEST_HERMES_KEY", "secret")
+	keyFile := filepath.Join(t.TempDir(), "hermes_key")
+	if err := os.WriteFile(keyFile, []byte("secret\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	var sawSession bool
 	var sawTools bool
 	var sawModel bool
@@ -348,6 +351,7 @@ func TestHermesChatRequestUsesSessionAndNoLocalTools(t *testing.T) {
 
 	cfg := DefaultConfig()
 	cfg.UseHermes("http://hermes.local/v1", "TEST_HERMES_KEY")
+	cfg.Model.APIKeyFile = keyFile
 	state := &State{Listeners: map[string]bool{}, Conversations: map[string][]ChatRecord{}}
 	engine := NewAgentEngine(cfg, state, NewToolRegistry(cfg, state, nil))
 	engine.client.Transport = handler

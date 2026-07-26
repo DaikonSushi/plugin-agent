@@ -106,9 +106,9 @@ func (e *AgentEngine) Run(ctx context.Context, key, prompt string) (string, erro
 }
 
 func (e *AgentEngine) chat(ctx context.Context, key string, messages []ChatMessage) (ChatMessage, error) {
-	apiKey := os.Getenv(e.cfg.Model.APIKeyEnv)
-	if apiKey == "" {
-		return ChatMessage{}, fmt.Errorf("missing API key env %s", e.cfg.Model.APIKeyEnv)
+	apiKey, _, err := e.modelAPIKey()
+	if err != nil {
+		return ChatMessage{}, err
 	}
 	reqBody := map[string]any{
 		"model":       e.cfg.Model.Model,
@@ -154,6 +154,25 @@ func (e *AgentEngine) chat(ctx context.Context, key string, messages []ChatMessa
 		return ChatMessage{}, errors.New("model returned no choices")
 	}
 	return data.Choices[0].Message, nil
+}
+
+func (e *AgentEngine) modelAPIKey() (string, string, error) {
+	if strings.TrimSpace(e.cfg.Model.APIKeyFile) != "" {
+		data, err := os.ReadFile(e.cfg.Model.APIKeyFile)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to read API key file %s: %w", e.cfg.Model.APIKeyFile, err)
+		}
+		apiKey := strings.TrimSpace(string(data))
+		if apiKey == "" {
+			return "", "", fmt.Errorf("API key file %s is empty", e.cfg.Model.APIKeyFile)
+		}
+		return apiKey, e.cfg.Model.APIKeyFile, nil
+	}
+	apiKey := os.Getenv(e.cfg.Model.APIKeyEnv)
+	if apiKey == "" {
+		return "", "", fmt.Errorf("missing API key env %s", e.cfg.Model.APIKeyEnv)
+	}
+	return apiKey, e.cfg.Model.APIKeyEnv, nil
 }
 
 func (e *AgentEngine) systemPrompt(userPrompt string) string {

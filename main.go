@@ -143,7 +143,7 @@ Agent commands:
 /agent skills
 /agent index
 /agent model status
-/agent model hermes [base_url] [api_key_env]
+/agent model hermes [base_url] [api_key_env|file:/path/to/key]
 /agent model openai [base_url] [model] [api_key_env]
 /agent panic
 Schedules: 10m, 2h, once:2026-06-01 09:30, daily@09:30, weekly@Mon,09:30
@@ -200,14 +200,21 @@ func (p *AgentPlugin) handleModelCommand(bot *pluginsdk.BotClient, args []string
 	switch args[0] {
 	case "hermes":
 		baseURL := ""
-		apiKeyEnv := ""
+		apiKeyRef := ""
 		if len(args) >= 2 {
 			baseURL = args[1]
 		}
 		if len(args) >= 3 {
-			apiKeyEnv = args[2]
+			apiKeyRef = args[2]
 		}
-		p.cfg.UseHermes(baseURL, apiKeyEnv)
+		p.cfg.UseHermes(baseURL, "")
+		if strings.HasPrefix(apiKeyRef, "file:") {
+			p.cfg.Model.APIKeyFile = strings.TrimPrefix(apiKeyRef, "file:")
+			p.cfg.Model.APIKeyEnv = ""
+		} else if apiKeyRef != "" {
+			p.cfg.Model.APIKeyEnv = apiKeyRef
+			p.cfg.Model.APIKeyFile = ""
+		}
 	case "openai", "openai-compatible":
 		baseURL := ""
 		model := ""
@@ -236,11 +243,12 @@ func (p *AgentPlugin) handleModelCommand(bot *pluginsdk.BotClient, args []string
 
 func (p *AgentPlugin) modelStatus() string {
 	return fmt.Sprintf(
-		"Model config\nProvider: %s\nModel: %s\nBase URL: %s\nAPI key env: %s\nLocal tools disabled: %v\nHermes session: %v",
+		"Model config\nProvider: %s\nModel: %s\nBase URL: %s\nAPI key env: %s\nAPI key file: %s\nLocal tools disabled: %v\nHermes session: %v",
 		p.cfg.Model.Provider,
 		p.cfg.Model.Model,
 		p.cfg.Model.BaseURL,
 		p.cfg.Model.APIKeyEnv,
+		p.cfg.Model.APIKeyFile,
 		p.cfg.Model.DisableLocalTools,
 		p.cfg.Model.HermesSession,
 	)

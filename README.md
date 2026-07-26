@@ -43,7 +43,7 @@ This lets domain plugins claim keyword messages before the agent sees them.
 /agent skills
 /agent index
 /agent model status
-/agent model hermes [base_url] [api_key_env]
+/agent model hermes [base_url] [api_key_env|file:/path/to/key]
 /agent model openai [base_url] [model] [api_key_env]
 /agent panic
 ```
@@ -96,6 +96,7 @@ hermes gateway
 
 ```text
 /agent model hermes http://127.0.0.1:8642/v1 HERMES_API_SERVER_KEY
+/agent model hermes http://hermes:8642/v1 file:/app/plugins-config/agent/hermes_api_key
 /agent model status
 ```
 
@@ -104,8 +105,9 @@ Hermes mode uses:
 ```json
 {
   "provider": "hermes",
-  "base_url": "http://127.0.0.1:8642/v1",
+  "base_url": "http://hermes:8642/v1",
   "api_key_env": "HERMES_API_SERVER_KEY",
+  "api_key_file": "/app/plugins-config/agent/hermes_api_key",
   "model": "hermes-agent",
   "disable_local_tools": true,
   "hermes_session": true

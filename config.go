@@ -12,7 +12,7 @@ const (
 	configPath             = "plugins-config/agent/config.json"
 	defaultOpenAIProvider  = "openai-compatible"
 	defaultHermesProvider  = "hermes"
-	defaultHermesBaseURL   = "http://127.0.0.1:8642/v1"
+	defaultHermesBaseURL   = "http://hermes:8642/v1"
 	defaultHermesAPIKeyEnv = "HERMES_API_SERVER_KEY"
 	defaultHermesModel     = "hermes-agent"
 )
@@ -36,6 +36,7 @@ type ModelConfig struct {
 	Provider          string   `json:"provider,omitempty"`
 	BaseURL           string   `json:"base_url"`
 	APIKeyEnv         string   `json:"api_key_env"`
+	APIKeyFile        string   `json:"api_key_file,omitempty"`
 	Model             string   `json:"model"`
 	ModelOptions      []string `json:"model_options,omitempty"`
 	Temperature       float64  `json:"temperature"`
@@ -252,6 +253,7 @@ func (c *Config) UseHermes(baseURL, apiKeyEnv string) {
 	c.Model.Provider = defaultHermesProvider
 	c.Model.BaseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	c.Model.APIKeyEnv = strings.TrimSpace(apiKeyEnv)
+	c.Model.APIKeyFile = ""
 	c.Model.Model = defaultHermesModel
 	c.Model.ModelOptions = []string{defaultHermesModel}
 	c.Model.DisableLocalTools = true
@@ -271,6 +273,7 @@ func (c *Config) UseOpenAICompatible(baseURL, model, apiKeyEnv string) {
 	c.Model.Provider = defaultOpenAIProvider
 	c.Model.BaseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	c.Model.APIKeyEnv = strings.TrimSpace(apiKeyEnv)
+	c.Model.APIKeyFile = ""
 	c.Model.Model = strings.TrimSpace(model)
 	c.Model.ModelOptions = []string{c.Model.Model}
 	c.Model.DisableLocalTools = false
