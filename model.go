@@ -51,12 +51,17 @@ type ToolDefFunction struct {
 }
 
 func NewAgentEngine(cfg *Config, state *State, tools *ToolRegistry) *AgentEngine {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if cfg.Model.Provider == defaultHermesProvider {
+		transport.Proxy = nil
+	}
 	return &AgentEngine{
 		cfg:   cfg,
 		state: state,
 		tools: tools,
 		client: &http.Client{
-			Timeout: time.Duration(cfg.Model.TimeoutSec) * time.Second,
+			Timeout:   time.Duration(cfg.Model.TimeoutSec) * time.Second,
+			Transport: transport,
 		},
 	}
 }
