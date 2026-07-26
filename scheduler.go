@@ -140,7 +140,7 @@ func (s *Scheduler) tick() {
 			due = append(due, *task)
 			task.LastRunAt = now
 			next, err := NextRun(task.Schedule, now.Add(time.Second), s.cfg.Location())
-			if err != nil || strings.HasPrefix(task.Schedule, "once:") || isDurationSchedule(task.Schedule) {
+			if err != nil || isOneShotSchedule(task.Schedule) {
 				task.Enabled = false
 			} else {
 				task.NextRunAt = next
@@ -226,6 +226,18 @@ func isDurationSchedule(spec string) bool {
 		return false
 	}
 	_, err := time.ParseDuration(spec)
+	return err == nil
+}
+
+func isOneShotSchedule(spec string) bool {
+	spec = strings.TrimSpace(spec)
+	if spec == "" || strings.HasPrefix(spec, "daily@") || strings.HasPrefix(spec, "weekly@") {
+		return false
+	}
+	if strings.HasPrefix(spec, "once:") || isDurationSchedule(spec) {
+		return true
+	}
+	_, err := parseOnce(spec, time.Local)
 	return err == nil
 }
 

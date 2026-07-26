@@ -20,13 +20,15 @@ type AgentPlugin struct {
 func (p *AgentPlugin) Info() pluginsdk.PluginInfo {
 	return pluginsdk.PluginInfo{
 		Name:        "agent",
-		Version:     "0.2.0",
+		Version:     "0.3.0",
 		Description: "Personal AI agent with local project awareness, skills, tools, and scheduled tasks",
 		Author:      "hovanzhang",
 		Commands: []string{
 			"ai", "agent",
 		},
 		HandleAllMessages: true,
+		MessagePriority:   -1000,
+		Fallback:          true,
 	}
 }
 
@@ -113,14 +115,16 @@ func (p *AgentPlugin) handlePrompt(ctx context.Context, bot *pluginsdk.BotClient
 	}
 	key := targetKey(msg.Type, msg.GroupID, msg.UserID)
 	go func() {
-		_, _ = bot.Reply(msg, pluginsdk.Text("Agent is working..."))
+		if p.cfg.Response.SendWorkingMessage {
+			_, _ = bot.Reply(msg, pluginsdk.Text("处理中..."))
+		}
 		cctx, cancel := context.WithTimeout(context.Background(), time.Duration(p.cfg.Model.TimeoutSec)*time.Second)
 		defer cancel()
 		result, err := p.engine.Run(cctx, key, prompt)
 		if err != nil {
 			result = "Agent failed: " + err.Error()
 		}
-		_, _ = bot.Reply(msg, pluginsdk.Text(result))
+		_, _ = bot.Reply(msg, pluginsdk.Text(formatQQText(result, p.cfg)))
 	}()
 }
 
@@ -138,6 +142,9 @@ Agent commands:
 /agent task resume <id>
 /agent skills
 /agent index
+/agent model status
+/agent model hermes [base_url] [api_key_env]
+/agent model openai [base_url] [model] [api_key_env]
 /agent panic
 Schedules: 10m, 2h, once:2026-06-01 09:30, daily@09:30, weekly@Mon,09:30
 `)))
@@ -174,6 +181,8 @@ Schedules: 10m, 2h, once:2026-06-01 09:30, daily@09:30, weekly@Mon,09:30
 			return
 		}
 		bot.Reply(msg, pluginsdk.Text("Project index rebuilt."))
+	case "model":
+		p.handleModelCommand(bot, args[1:], msg)
 	case "panic":
 		p.cfg.Permission.AutoExecute = false
 		_ = p.cfg.Save(configPath)
@@ -183,9 +192,64 @@ Schedules: 10m, 2h, once:2026-06-01 09:30, daily@09:30, weekly@Mon,09:30
 	}
 }
 
+func (p *AgentPlugin) handleModelCommand(bot *pluginsdk.BotClient, args []string, msg *pluginsdk.Message) {
+	if len(args) == 0 || args[0] == "status" {
+		bot.Reply(msg, pluginsdk.Text(p.modelStatus()))
+		return
+	}
+	switch args[0] {
+	case "hermes":
+		baseURL := ""
+		apiKeyEnv := ""
+		if len(args) >= 2 {
+			baseURL = args[1]
+		}
+		if len(args) >= 3 {
+			apiKeyEnv = args[2]
+		}
+		p.cfg.UseHermes(baseURL, apiKeyEnv)
+	case "openai", "openai-compatible":
+		baseURL := ""
+		model := ""
+		apiKeyEnv := ""
+		if len(args) >= 2 {
+			baseURL = args[1]
+		}
+		if len(args) >= 3 {
+			model = args[2]
+		}
+		if len(args) >= 4 {
+			apiKeyEnv = args[3]
+		}
+		p.cfg.UseOpenAICompatible(baseURL, model, apiKeyEnv)
+	default:
+		bot.Reply(msg, pluginsdk.Text("Usage: /agent model status|hermes|openai"))
+		return
+	}
+	if err := p.cfg.Save(configPath); err != nil {
+		bot.Reply(msg, pluginsdk.Text("Model config save failed: "+err.Error()))
+		return
+	}
+	p.engine = NewAgentEngine(p.cfg, p.state, p.tools)
+	bot.Reply(msg, pluginsdk.Text("Model config updated.\n"+p.modelStatus()))
+}
+
+func (p *AgentPlugin) modelStatus() string {
+	return fmt.Sprintf(
+		"Model config\nProvider: %s\nModel: %s\nBase URL: %s\nAPI key env: %s\nLocal tools disabled: %v\nHermes session: %v",
+		p.cfg.Model.Provider,
+		p.cfg.Model.Model,
+		p.cfg.Model.BaseURL,
+		p.cfg.Model.APIKeyEnv,
+		p.cfg.Model.DisableLocalTools,
+		p.cfg.Model.HermesSession,
+	)
+}
+
 func (p *AgentPlugin) handleStatus(bot *pluginsdk.BotClient, msg *pluginsdk.Message) {
 	text := fmt.Sprintf(
-		"Agent status\nModel: %s\nBase URL: %s\nAuto execute: %v\nProjects: %d\nTasks: %d\nSkills: %d",
+		"Agent status\nProvider: %s\nModel: %s\nBase URL: %s\nAuto execute: %v\nProjects: %d\nTasks: %d\nSkills: %d",
+		p.cfg.Model.Provider,
 		p.cfg.Model.Model,
 		p.cfg.Model.BaseURL,
 		p.cfg.Permission.AutoExecute,

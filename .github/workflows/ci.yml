@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      GONOSUMDB: github.com/DaikonSushi/bot-platform
+    steps:
+      - name: Checkout plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin-agent
+
+      - name: Checkout bot-platform SDK
+        uses: actions/checkout@v4
+        with:
+          repository: DaikonSushi/bot-platform
+          path: bot-platform
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Validate plugin
+        working-directory: plugin-agent
+        run: bash scripts/ci-check.sh

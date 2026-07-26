@@ -4,32 +4,45 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 const (
-	configPath = "plugins-config/agent/config.json"
+	configPath             = "plugins-config/agent/config.json"
+	defaultOpenAIProvider  = "openai-compatible"
+	defaultHermesProvider  = "hermes"
+	defaultHermesBaseURL   = "http://127.0.0.1:8642/v1"
+	defaultHermesAPIKeyEnv = "HERMES_API_SERVER_KEY"
+	defaultHermesModel     = "hermes-agent"
 )
 
 type Config struct {
-	Model       ModelConfig       `json:"model"`
-	Permission  PermissionConfig  `json:"permissions"`
-	Projects    []ProjectConfig   `json:"projects"`
-	SkillsDir   string            `json:"skills_dir"`
-	DataDir     string            `json:"data_dir"`
-	Schedule    ScheduleConfig    `json:"schedule"`
-	Access      AccessConfig      `json:"access"`
-	ChatTrigger ChatTriggerConfig `json:"chat_triggers"`
-	AdminUsers  []int64           `json:"admin_users"`
+	Model        ModelConfig               `json:"model"`
+	Permission   PermissionConfig          `json:"permissions"`
+	Projects     []ProjectConfig           `json:"projects"`
+	SkillsDir    string                    `json:"skills_dir"`
+	DataDir      string                    `json:"data_dir"`
+	Schedule     ScheduleConfig            `json:"schedule"`
+	Access       AccessConfig              `json:"access"`
+	Runtime      RuntimeConfig             `json:"runtime"`
+	Response     ResponseConfig            `json:"response"`
+	ChatTrigger  ChatTriggerConfig         `json:"chat_triggers"`
+	ConfigPolicy ConfigPolicyRuntimeConfig `json:"config_policy"`
+	AdminUsers   []int64                   `json:"admin_users"`
 }
 
 type ModelConfig struct {
-	BaseURL     string  `json:"base_url"`
-	APIKeyEnv   string  `json:"api_key_env"`
-	Model       string  `json:"model"`
-	Temperature float64 `json:"temperature"`
-	TimeoutSec  int     `json:"timeout_seconds"`
-	MaxSteps    int     `json:"max_steps"`
+	Provider          string   `json:"provider,omitempty"`
+	BaseURL           string   `json:"base_url"`
+	APIKeyEnv         string   `json:"api_key_env"`
+	Model             string   `json:"model"`
+	ModelOptions      []string `json:"model_options,omitempty"`
+	Temperature       float64  `json:"temperature"`
+	TimeoutSec        int      `json:"timeout_seconds"`
+	MaxSteps          int      `json:"max_steps"`
+	DisableLocalTools bool     `json:"disable_local_tools,omitempty"`
+	HermesSession     bool     `json:"hermes_session,omitempty"`
 }
 
 type PermissionConfig struct {
@@ -59,20 +72,38 @@ type AccessConfig struct {
 	RoleWhitelist   []string `json:"role_whitelist"`
 }
 
+type RuntimeConfig struct {
+	BotPlatformAdminURL string `json:"bot_platform_admin_url"`
+	WorkspacePath       string `json:"workspace_path"`
+	ContainerName       string `json:"container_name"`
+}
+
+type ResponseConfig struct {
+	SendWorkingMessage bool `json:"send_working_message"`
+	PlainText          bool `json:"plain_text"`
+}
+
 type ChatTriggerConfig struct {
 	RequireMentionInGroup bool `json:"require_mention_in_group"`
 	HandleAllPrivate      bool `json:"handle_all_private"`
 }
 
+type ConfigPolicyRuntimeConfig struct {
+	PolicyDir string `json:"policy_dir"`
+	BackupDir string `json:"backup_dir"`
+}
+
 func DefaultConfig() *Config {
 	return &Config{
 		Model: ModelConfig{
-			BaseURL:     "https://api.openai.com/v1",
-			APIKeyEnv:   "OPENAI_API_KEY",
-			Model:       "gpt-4.1-mini",
-			Temperature: 0.2,
-			TimeoutSec:  120,
-			MaxSteps:    8,
+			Provider:     defaultOpenAIProvider,
+			BaseURL:      "https://api.openai.com/v1",
+			APIKeyEnv:    "OPENAI_API_KEY",
+			Model:        "gpt-4.1-mini",
+			ModelOptions: []string{"gpt-4.1-mini"},
+			Temperature:  0.2,
+			TimeoutSec:   120,
+			MaxSteps:     8,
 		},
 		Permission: PermissionConfig{
 			AutoExecute:      true,
@@ -100,9 +131,22 @@ func DefaultConfig() *Config {
 			GroupWhitelist:  []int64{},
 			RoleWhitelist:   []string{},
 		},
+		Runtime: RuntimeConfig{
+			BotPlatformAdminURL: "http://127.0.0.1:8080",
+			WorkspacePath:       "/workspace/qq_bot",
+			ContainerName:       "qq-bot-all-in-one",
+		},
+		Response: ResponseConfig{
+			SendWorkingMessage: false,
+			PlainText:          true,
+		},
 		ChatTrigger: ChatTriggerConfig{
 			RequireMentionInGroup: true,
 			HandleAllPrivate:      true,
+		},
+		ConfigPolicy: ConfigPolicyRuntimeConfig{
+			PolicyDir: "plugins-config/config-policies",
+			BackupDir: "plugins-config/config-backups",
 		},
 		AdminUsers: []int64{},
 	}
@@ -139,6 +183,9 @@ func (c *Config) Save(path string) error {
 }
 
 func (c *Config) applyDefaults() {
+	if c.Model.Provider == "" {
+		c.Model.Provider = defaultOpenAIProvider
+	}
 	if c.Model.BaseURL == "" {
 		c.Model.BaseURL = "https://api.openai.com/v1"
 	}
@@ -147,6 +194,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Model.Model == "" {
 		c.Model.Model = "gpt-4.1-mini"
+	}
+	if len(c.Model.ModelOptions) == 0 {
+		c.Model.ModelOptions = []string{c.Model.Model}
 	}
 	if c.Model.TimeoutSec <= 0 {
 		c.Model.TimeoutSec = 120
@@ -172,6 +222,59 @@ func (c *Config) applyDefaults() {
 	if len(c.Permission.DeniedCommandParts) == 0 {
 		c.Permission.DeniedCommandParts = DefaultConfig().Permission.DeniedCommandParts
 	}
+	if c.Runtime.BotPlatformAdminURL == "" {
+		c.Runtime.BotPlatformAdminURL = "http://127.0.0.1:8080"
+	}
+	if c.Runtime.WorkspacePath == "" {
+		c.Runtime.WorkspacePath = "/workspace/qq_bot"
+	}
+	if c.Runtime.ContainerName == "" {
+		c.Runtime.ContainerName = "qq-bot-all-in-one"
+	}
+	if !c.Response.PlainText {
+		c.Response.PlainText = true
+	}
+	if c.ConfigPolicy.PolicyDir == "" {
+		c.ConfigPolicy.PolicyDir = "plugins-config/config-policies"
+	}
+	if c.ConfigPolicy.BackupDir == "" {
+		c.ConfigPolicy.BackupDir = "plugins-config/config-backups"
+	}
+}
+
+func (c *Config) UseHermes(baseURL, apiKeyEnv string) {
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = defaultHermesBaseURL
+	}
+	if strings.TrimSpace(apiKeyEnv) == "" {
+		apiKeyEnv = defaultHermesAPIKeyEnv
+	}
+	c.Model.Provider = defaultHermesProvider
+	c.Model.BaseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	c.Model.APIKeyEnv = strings.TrimSpace(apiKeyEnv)
+	c.Model.Model = defaultHermesModel
+	c.Model.ModelOptions = []string{defaultHermesModel}
+	c.Model.DisableLocalTools = true
+	c.Model.HermesSession = true
+}
+
+func (c *Config) UseOpenAICompatible(baseURL, model, apiKeyEnv string) {
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = "https://api.openai.com/v1"
+	}
+	if strings.TrimSpace(model) == "" {
+		model = "gpt-4.1-mini"
+	}
+	if strings.TrimSpace(apiKeyEnv) == "" {
+		apiKeyEnv = "OPENAI_API_KEY"
+	}
+	c.Model.Provider = defaultOpenAIProvider
+	c.Model.BaseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	c.Model.APIKeyEnv = strings.TrimSpace(apiKeyEnv)
+	c.Model.Model = strings.TrimSpace(model)
+	c.Model.ModelOptions = []string{c.Model.Model}
+	c.Model.DisableLocalTools = false
+	c.Model.HermesSession = false
 }
 
 func (c *Config) ensureDirs() error {
@@ -182,6 +285,12 @@ func (c *Config) ensureDirs() error {
 		return err
 	}
 	if err := os.MkdirAll(c.DataDir, 0755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(c.ConfigPolicy.PolicyDir, 0755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(c.ConfigPolicy.BackupDir, 0755); err != nil {
 		return err
 	}
 	return nil

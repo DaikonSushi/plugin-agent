@@ -74,7 +74,7 @@ func (e *AgentEngine) Run(ctx context.Context, key, prompt string) (string, erro
 	}
 	var final string
 	for step := 0; step < maxSteps; step++ {
-		msg, err := e.chat(ctx, messages)
+		msg, err := e.chat(ctx, key, messages)
 		if err != nil {
 			return "", err
 		}
@@ -105,7 +105,7 @@ func (e *AgentEngine) Run(ctx context.Context, key, prompt string) (string, erro
 	return final, nil
 }
 
-func (e *AgentEngine) chat(ctx context.Context, messages []ChatMessage) (ChatMessage, error) {
+func (e *AgentEngine) chat(ctx context.Context, key string, messages []ChatMessage) (ChatMessage, error) {
 	apiKey := os.Getenv(e.cfg.Model.APIKeyEnv)
 	if apiKey == "" {
 		return ChatMessage{}, fmt.Errorf("missing API key env %s", e.cfg.Model.APIKeyEnv)
@@ -114,8 +114,10 @@ func (e *AgentEngine) chat(ctx context.Context, messages []ChatMessage) (ChatMes
 		"model":       e.cfg.Model.Model,
 		"messages":    messages,
 		"temperature": e.cfg.Model.Temperature,
-		"tools":       e.tools.Definitions(),
-		"tool_choice": "auto",
+	}
+	if !e.cfg.Model.DisableLocalTools {
+		reqBody["tools"] = e.tools.Definitions()
+		reqBody["tool_choice"] = "auto"
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
@@ -128,6 +130,9 @@ func (e *AgentEngine) chat(ctx context.Context, messages []ChatMessage) (ChatMes
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
+	if e.cfg.Model.HermesSession {
+		req.Header.Set("X-Hermes-Session-Key", "qq-bot:"+key)
+	}
 	resp, err := e.client.Do(req)
 	if err != nil {
 		return ChatMessage{}, err
@@ -156,7 +161,22 @@ func (e *AgentEngine) systemPrompt(userPrompt string) string {
 	var b strings.Builder
 	b.WriteString("You are a personal QQ AI agent. Answer in the user's language. ")
 	b.WriteString("You may autonomously use tools because this deployment is configured for auto execution. ")
-	b.WriteString("Stay within configured allowlists. Prefer concise status updates and clear final answers.\n\n")
+	b.WriteString("Stay within configured allowlists. Prefer concise status updates and clear final answers. ")
+	b.WriteString("QQ renders Markdown poorly, so write plain text: no Markdown headings, no bold markers, no tables unless necessary.\n\n")
+	b.WriteString("Runtime:\n")
+	b.WriteString("- bot-platform admin API: " + e.cfg.Runtime.BotPlatformAdminURL + "\n")
+	b.WriteString("- workspace: " + e.cfg.Runtime.WorkspacePath + "\n")
+	b.WriteString("- container: " + e.cfg.Runtime.ContainerName + "\n")
+	b.WriteString("- plugin config: /app/plugins-config/agent/config.json\n\n")
+	b.WriteString("Platform behavior:\n")
+	b.WriteString("- bot-platform dispatches domain plugins before fallback agents by message_priority/fallback metadata.\n")
+	b.WriteString("- this agent is a fallback plugin, so other plugin keyword handlers should get the first chance to handle messages.\n")
+	b.WriteString("- online plugin lifecycle is available through bot-platform admin API and the plugin_control tool.\n\n")
+	b.WriteString("When the user asks about installed or running plugins, use bot_plugins instead of scanning files. ")
+	b.WriteString("When the user asks about this bot's own runtime, use runtime_status. ")
+	b.WriteString("When the user asks to install/start/stop/restart/uninstall plugins, use plugin_control.\n\n")
+	b.WriteString("When the user asks to view or change plugin configuration, use plugin_config instead of write_file. ")
+	b.WriteString("Never change protected config fields such as admin users, whitelists, credentials, paths, or domains unless plugin_config explicitly allows the field.\n\n")
 	b.WriteString("Available local projects:\n")
 	for _, p := range e.cfg.Projects {
 		b.WriteString("- " + p.Name + ": " + p.Path)
